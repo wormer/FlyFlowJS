@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FlyFlow - Smart Swarm</title>
     <style>
-        body { margin: 0; overflow: hidden; background: black; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background: #002233; }
+        canvas {
+            margin: 50px;
+            width: calc(100% - 2 * 50px);
+            height: calc(100vh - 2 * 50px);
+            display: block;
+            background: black;
+        }
     </style>
 </head>
 <body>
@@ -16,8 +22,8 @@
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        const logicalWidth = 1920;
+        const logicalHeight = 1080;
 
         let paths = [];
         let swarm = [];
@@ -229,15 +235,44 @@
             }
         }
 
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+
+            // Физические размеры канваса
+            const canvasWidth = canvas.clientWidth; // Физическая ширина канваса
+            const canvasHeight = canvas.clientHeight; // Физическая высота канваса
+
+            // Логические размеры (1920x1080)
+            const logicalWidth = 1920;
+            const logicalHeight = 1080;
+
+            // Масштаб по осям X и Y
+            const scaleX = logicalWidth / canvasWidth; // Масштаб по X
+            const scaleY = logicalHeight / canvasHeight; // Масштаб по Y
+
+            // Координаты мыши относительно канваса
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Преобразуем физические координаты в логические
+            const logicalX = mouseX * scaleX;
+            const logicalY = mouseY * scaleY;
+
+            return { x: logicalX, y: logicalY };
+        }
+
         // Добавляем обработчик для создания препятствий
         canvas.addEventListener("mousedown", (e) => {
+            const { x, y } = getMousePos(e);
+
             if (e.shiftKey) { // Если зажата клавиша Shift, создаем препятствие
                 const newObstacle = new Obstacle([]);
                 obstacles.push(newObstacle);
                 drawing = true;
+                newObstacle.points.push({ x, y });
             } else { // Иначе создаем обычную линию
                 const newPath = {
-                    points: [],
+                    points: [{ x, y }],
                     activationRadius: new ActivationRadius()
                 };
                 paths.push(newPath);
@@ -248,15 +283,17 @@
 
         canvas.addEventListener("mousemove", (e) => {
             if (drawing) {
+                const { x, y } = getMousePos(e);
+
                 if (e.shiftKey) { // Если зажата клавиша Shift, добавляем точки к препятствию
                     const currentObstacle = obstacles[obstacles.length - 1];
                     if (currentObstacle) {
-                        currentObstacle.points.push({ x: e.clientX, y: e.clientY });
+                        currentObstacle.points.push({ x, y });
                     }
                 } else { // Иначе добавляем точки к обычной линии
                     const currentPath = paths[paths.length - 1];
                     if (currentPath) {
-                        currentPath.points.push({ x: e.clientX, y: e.clientY });
+                        currentPath.points.push({ x, y });
                     }
                 }
             }
@@ -379,9 +416,9 @@
                 this.y += this.vy;
 
                 if (this.x < 0) { this.x = 0; this.vx *= -1; }
-                if (this.x > canvas.width) { this.x = canvas.width; this.vx *= -1; }
+                if (this.x > logicalWidth) { this.x = logicalWidth; this.vx *= -1; }
                 if (this.y < 0) { this.y = 0; this.vy *= -1; }
-                if (this.y > canvas.height) { this.y = canvas.height; this.vy *= -1; }
+                if (this.y > logicalHeight) { this.y = logicalHeight; this.vy *= -1; }
             }
 
             findClosestAttractionSegment() {
@@ -668,6 +705,19 @@
             });
 
             // Рисуем линии
+
+            // Вычисляем масштаб
+            const scaleX = canvas.width / logicalWidth;
+            const scaleY = canvas.height / logicalHeight;
+            // const scale = Math.min(scaleX, scaleY); // Используем минимальный масштаб, чтобы сохранить пропорции
+
+            // Применяем трансформации
+            ctx.save(); // Сохраняем текущее состояние контекста
+            ctx.translate(canvas.width / 2, canvas.height / 2); // Смещаем начало координат в центр
+            ctx.scale(scaleX, scaleY); // Применяем масштаб
+            ctx.translate(-logicalWidth / 2, -logicalHeight / 2); // Возвращаем начало координат в логическую позицию
+
+            // Отрисовываем все объекты
             for (let path of paths) {
                 if (path.points.length < 2) continue;
 
@@ -710,11 +760,29 @@
                 agent.draw();
             });
 
+            ctx.restore(); // Восстанавливаем состояние контекста
+
             requestAnimationFrame(animate);
         }
 
         // Загружаем первый уровень при старте
         loadLevel(currentLevel);
+
+        function resizeCanvas() {
+            // Получаем физические размеры канваса из CSS
+            const canvasWidth = canvas.clientWidth;
+            const canvasHeight = canvas.clientHeight;
+
+            // Обновляем размеры канваса в JavaScript
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+        }
+
+        // Отслеживаем изменение размеров окна
+        window.addEventListener("resize", resizeCanvas);
+
+        // Инициализация размеров канваса при загрузке
+        resizeCanvas();
 
         // Запускаем анимацию
         animate();
