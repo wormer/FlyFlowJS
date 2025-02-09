@@ -168,8 +168,6 @@
                     let distToSegment = Math.sqrt(toSegmentX * toSegmentX + toSegmentY * toSegmentY);
 
                     if (distToSegment < radius) {
-
-
                         this.vx += segDX * this.influence;
                         this.vy += segDY * this.influence;
                         this.influenced = true; // Точка под влиянием линии
@@ -192,42 +190,19 @@
                     this.vx += (dx / dist) * force;
                     this.vy += (dy / dist) * force;
 
-                        // // Притяжение к линии
-                        // const k = 1.0; // Коэффициент силы притяжения
-                        // const epsilon = 0.1; // Маленькое число, чтобы избежать деления на ноль
-                        // let attractionForce = k / (distToSegment * distToSegment + epsilon);
+                    //     // Притяжение к линии
+                    //     const k = 1.0; // Коэффициент силы притяжения
+                    //     const epsilon = 0.1; // Маленькое число, чтобы избежать деления на ноль
+                    //     let attractionForce = k / (distToSegment * distToSegment + epsilon);
 
-                        // this.vx -= (this.x - x1) * attractionForce;
-                        // this.vy -= (this.y - y1) * attractionForce;
+                    //     this.vx -= (this.x - x1) * attractionForce;
+                    //     this.vy -= (this.y - y1) * attractionForce;
                     // }
                 }
 
-                // Отталкивание от препятствий
-                let repulsionTarget = this.findClosestRepulsionSegment();
-                if (repulsionTarget) {
-                    let { x1, y1, x2, y2, radius } = repulsionTarget;
-
-                    let segDX = x2 - x1;
-                    let segDY = y2 - y1;
-                    let segLength = Math.sqrt(segDX * segDX + segDY * segDY);
-                    if (segLength > 0) {
-                        segDX /= segLength;
-                        segDY /= segLength;
-                    }
-
-                    let toSegmentX = x1 - this.x;
-                    let toSegmentY = y1 - this.y;
-                    let distToSegment = Math.sqrt(toSegmentX * toSegmentX + toSegmentY * toSegmentY);
-
-                    if (distToSegment < radius) {
-                        // Отталкивание от препятствия
-                        const repelStrength = 1.0; // Сила отталкивания
-                        const angle = Math.atan2(this.y - y1, this.x - x1); // Угол от препятствия к агенту
-                        const force = repelStrength / (distToSegment * distToSegment + 0.1); // Обратно квадратичное отталкивание
-
-                        this.vx += Math.cos(angle) * force;
-                        this.vy += Math.sin(angle) * force;
-                    }
+                // Коллизия с препятствиями
+                for (let obstacle of obstacles) {
+                    obstacle.checkCollision(this);
                 }
 
                 this.avoidCollisions();
@@ -354,7 +329,6 @@
         class Obstacle {
             constructor(points) {
                 this.points = points; // Точки для построения сплайна
-                this.activationRadius = maxActivationRadius; // Фиксированный радиус активации
             }
 
             draw() {
@@ -376,6 +350,71 @@
                 ctx.lineTo(this.points[last].x, this.points[last].y);
 
                 ctx.stroke();
+            }
+
+            // Проверка коллизии агента с препятствием
+            checkCollision(agent) {
+                for (let i = 0; i < this.points.length - 1; i++) {
+                    let x1 = this.points[i].x, y1 = this.points[i].y;
+                    let x2 = this.points[i + 1].x, y2 = this.points[i + 1].y;
+
+                    // Вектор сегмента препятствия
+                    let segDX = x2 - x1;
+                    let segDY = y2 - y1;
+                    let segLength = Math.sqrt(segDX * segDX + segDY * segDY);
+
+                    // Нормализованный вектор сегмента
+                    let segNormX = segDX / segLength;
+                    let segNormY = segDY / segLength;
+
+                    // Вектор от начала сегмента к агенту
+                    let toAgentX = agent.x - x1;
+                    let toAgentY = agent.y - y1;
+
+                    // Проекция вектора toAgent на сегмент
+                    let projection = toAgentX * segNormX + toAgentY * segNormY;
+
+                    // Если проекция за пределами сегмента, пропускаем
+                    if (projection < 0 || projection > segLength) continue;
+
+                    // Ближайшая точка на сегменте к агенту
+                    let closestX = x1 + projection * segNormX;
+                    let closestY = y1 + projection * segNormY;
+
+                    // Расстояние от агента до ближайшей точки на сегменте
+                    let distX = agent.x - closestX;
+                    let distY = agent.y - closestY;
+                    let dist = Math.sqrt(distX * distX + distY * distY);
+
+                    // Если расстояние меньше радиуса агента, происходит коллизия
+                    if (dist < collisionRadius) {
+                        // Вектор от ближайшей точки на сегменте к агенту
+                        let toAgentFromClosestX = agent.x - closestX;
+                        let toAgentFromClosestY = agent.y - closestY;
+
+                        // Нормаль к сегменту (перпендикуляр)
+                        let normalX = -segNormY;
+                        let normalY = segNormX;
+
+                        // Определяем, с какой стороны сегмента находится агент
+                        let side = toAgentFromClosestX * normalX + toAgentFromClosestY * normalY;
+
+                        // Если агент находится с "неправильной" стороны, инвертируем нормаль
+                        if (side < 0) {
+                            normalX = -normalX;
+                            normalY = -normalY;
+                        }
+
+                        // Отражение скорости агента относительно нормали
+                        let dot = agent.vx * normalX + agent.vy * normalY;
+                        agent.vx -= 2 * dot * normalX;
+                        agent.vy -= 2 * dot * normalY;
+
+                        // Немного отодвигаем агента от препятствия, чтобы избежать залипания
+                        agent.x = closestX + normalX * collisionRadius;
+                        agent.y = closestY + normalY * collisionRadius;
+                    }
+                }
             }
         }
 
