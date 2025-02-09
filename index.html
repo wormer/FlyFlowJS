@@ -7,29 +7,14 @@
     <style>
         body { margin: 0; overflow: hidden; background: black; }
         canvas { display: block; }
-        #resetButton {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 10px 15px;
-            background: red;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            z-index: 10;
-        }
-        #resetButton:hover { background: darkred; }
     </style>
 </head>
 <body>
-    <button id="resetButton">Сброс</button>
     <canvas id="canvas"></canvas>
 
     <script>
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
-        const resetButton = document.getElementById("resetButton");
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -199,20 +184,18 @@
 
         // Добавляем обработчик для создания препятствий
         canvas.addEventListener("mousedown", (e) => {
-            if (e.target !== resetButton) {
-                if (e.shiftKey) { // Если зажата клавиша Shift, создаем препятствие
-                    const newObstacle = new Obstacle([]);
-                    obstacles.push(newObstacle);
-                    drawing = true;
-                } else { // Иначе создаем обычную линию
-                    const newPath = {
-                        points: [],
-                        activationRadius: new ActivationRadius()
-                    };
-                    paths.push(newPath);
-                    drawing = true;
-                    newPath.activationRadius.increase();
-                }
+            if (e.shiftKey) { // Если зажата клавиша Shift, создаем препятствие
+                const newObstacle = new Obstacle([]);
+                obstacles.push(newObstacle);
+                drawing = true;
+            } else { // Иначе создаем обычную линию
+                const newPath = {
+                    points: [],
+                    activationRadius: new ActivationRadius()
+                };
+                paths.push(newPath);
+                drawing = true;
+                newPath.activationRadius.increase();
             }
         });
 
@@ -543,16 +526,6 @@
         }
 
         let obstacles = [];
-
-        resetButton.addEventListener("click", () => {
-            swarm = Array.from({ length: numAgents }, () => new Agent(
-                Math.random() * canvas.width, 
-                Math.random() * canvas.height
-            ));
-            paths = []; // Очищаем все пути
-        });
-
-        resetButton.click();
 
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
