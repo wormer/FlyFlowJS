@@ -117,8 +117,9 @@
             score = 0;
         }
 
-        // Функция для отрисовки круглой области
+        // Функция для отрисовки круглой области и счётчика очков
         function drawGoal() {
+            // Рисуем зелёный круг
             ctx.beginPath();
             ctx.arc(goalX, goalY, goalRadius, 0, Math.PI * 2);
             ctx.fillStyle = "rgba(0, 255, 0, 0.3)"; // Зелёный полупрозрачный круг
@@ -126,6 +127,19 @@
             ctx.strokeStyle = "green";
             ctx.lineWidth = 2;
             ctx.stroke();
+
+            // Рассчитываем процент очков
+            const percent = Math.min(Math.floor((score / 500) * 100), 100); // Округляем вниз и ограничиваем до 100%
+            const text = `${percent}%`;
+
+            // Настраиваем стиль текста
+            ctx.fillStyle = "white";
+            ctx.font = "24px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            // Рисуем текст в центре зелёного круга
+            ctx.fillText(text, goalX, goalY);
         }
 
         // Функция для отрисовки области рождения агентов
@@ -137,14 +151,6 @@
             ctx.strokeStyle = "blue";
             ctx.lineWidth = 2;
             ctx.stroke();
-        }
-
-        // Функция для отрисовки счётчика очков
-        function drawScore() {
-            ctx.fillStyle = "white";
-            ctx.font = "24px Arial";
-            ctx.textAlign = "left";
-            ctx.fillText(`Очки: ${score}`, 20, 40);
         }
 
         // Класс для управления радиусом активации линии
@@ -585,9 +591,6 @@
 
             // Рисуем область рождения агентов
             drawSpawnArea();
-
-            // Рисуем счётчик очков
-            drawScore();
 
             // Обновляем и рисуем точки
             swarm.forEach(agent => {
