@@ -41,6 +41,31 @@
         const collisionRadius = 8;
         let drawing = false;
 
+        // Добавляем переменные для счётчика очков и круглой области
+        let score = 0;
+        const goalRadius = 50; // Радиус круглой области
+        const goalX = canvas.width / 2; // Центр области по X
+        const goalY = canvas.height / 2; // Центр области по Y
+
+        // Функция для отрисовки круглой области
+        function drawGoal() {
+            ctx.beginPath();
+            ctx.arc(goalX, goalY, goalRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(0, 255, 0, 0.3)"; // Зелёный полупрозрачный круг
+            ctx.fill();
+            ctx.strokeStyle = "green";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Функция для отрисовки счётчика очков
+        function drawScore() {
+            ctx.fillStyle = "white";
+            ctx.font = "24px Arial";
+            ctx.textAlign = "left";
+            ctx.fillText(`Очки: ${score}`, 20, 40);
+        }
+
         // Класс для управления радиусом активации линии
         class ActivationRadius {
             constructor() {
@@ -203,6 +228,17 @@
                 // Коллизия с препятствиями
                 for (let obstacle of obstacles) {
                     obstacle.checkCollision(this);
+                }
+
+                // Проверка попадания в круглую область
+                let ex = this.x - goalX;
+                let ey = this.y - goalY;
+                let distToGoal = Math.sqrt(ex * ex + ey * ey);
+
+                if (distToGoal < goalRadius) {
+                    // Агент попал в область, удаляем его и увеличиваем счётчик очков
+                    swarm.splice(swarm.indexOf(this), 1);
+                    score += 1;
                 }
 
                 this.avoidCollisions();
@@ -464,6 +500,12 @@
             for (let obstacle of obstacles) {
                 obstacle.draw();
             }
+
+            // Рисуем круглую область
+            drawGoal();
+
+            // Рисуем счётчик очков
+            drawScore();
 
             // Обновляем и рисуем точки
             swarm.forEach(agent => {
