@@ -37,7 +37,8 @@
                 obstacles: [
                     // Пример замкнутых линий препятствий (прямоугольники)
                     [{ x: 300, y: 200 }, { x: 1400, y: 200 }, { x: 1400, y: 600 }, { x: 300, y: 600 }, { x: 300, y: 200 }],
-                ]
+                ],
+                dangerZones: []
             },
             {
                 goalX: 1500,
@@ -48,7 +49,8 @@
                 obstacles: [
                     // Пример замкнутых линий препятствий (прямоугольники)
                     [{ x: 100, y: 100 }, { x: 500, y: 100 }, { x: 500, y: 300 }, { x: 1400, y: 300 }, { x: 1400, y: 200 }, { x: 1600, y: 200 }, { x: 1600, y: 500 }, { x: 1400, y: 500 }, { x: 1400, y: 400 }, { x: 500, y: 400 }, { x: 500, y: 600 }, { x: 100, y: 600 }, { x: 100, y: 100 }],
-                ]
+                ],
+                dangerZones: []
             },
             {
                 goalX: 1000,
@@ -59,7 +61,8 @@
                 obstacles: [
                     // Пример замкнутых линий препятствий (прямоугольники)
                     [{ x: 100, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 300 }, { x: 450, y: 300 }, { x: 450, y: 50 }, { x: 850, y: 50 }, { x: 850, y: 350 }, { x: 300, y: 350 }, { x: 300, y: 200 }, { x: 200, y: 200 }, { x: 200, y: 400 }, { x: 500, y: 400 }, { x: 500, y: 600 }, { x: 600, y: 600 }, { x: 600, y: 400 }, { x: 1100, y: 400 }, { x: 1100, y: 600 }, { x: 1200, y: 600 }, { x: 1200, y: 600 }, { x: 1200, y: 400 }, { x: 1400, y: 400 }, { x: 1400, y: 300 }, { x: 900, y: 300 }, { x: 900, y: 100 }, { x: 1600, y: 100 }, { x: 1600, y: 600 }, { x: 1400, y: 600 }, { x: 1400, y: 800 }, { x: 900, y: 800 }, { x: 900, y: 600 }, { x: 800, y: 600 }, { x: 800, y: 800 }, { x: 300, y: 800 }, { x: 300, y: 600 }, { x: 100, y: 600 }, { x: 100, y: 100 }],
-                ]
+                ],
+                dangerZones: []
             },
             {
                 goalX: 100,
@@ -74,9 +77,24 @@
                     [{ x: 50, y: 300 }, { x: 150, y: 300 }, { x: 150, y: 400 }, { x: 50, y: 400 }, { x: 50, y: 300 }],
                     [{ x: 300, y: 300 }, { x: 400, y: 300 }, { x: 400, y: 400 }, { x: 300, y: 400 }, { x: 300, y: 300 }],
                     [{ x: 175, y: 175 }, { x: 275, y: 175 }, { x: 275, y: 275 }, { x: 175, y: 275 }, { x: 175, y: 175 }],
+                ],
+                dangerZones: []
+            },
+            {
+                goalX: 1500,
+                goalY: 350,
+                spawnX: 200, // Координаты точки рождения агентов
+                spawnY: 200,
+                spawnRadius: 50, // Радиус области рождения агентов
+                obstacles: [
+                    // Пример замкнутых линий препятствий (прямоугольники)
+                    [{ x: 100, y: 100 }, { x: 500, y: 100 }, { x: 500, y: 300 }, { x: 1400, y: 300 }, { x: 1400, y: 200 }, { x: 1600, y: 200 }, { x: 1600, y: 500 }, { x: 1400, y: 500 }, { x: 1400, y: 400 }, { x: 500, y: 400 }, { x: 500, y: 600 }, { x: 100, y: 600 }, { x: 100, y: 100 }],
+                ],
+                dangerZones: [
+                    [{ x: 500, y: 310 }, { x: 1400, y: 310 }],
+                    [{ x: 500, y: 390 }, { x: 1400, y: 390 }],
                 ]
             },
-            // Добавьте больше уровней по аналогии
         ];
 
         let currentLevel = 0; // Текущий уровень
@@ -101,6 +119,11 @@
             obstacles = [];
             for (let points of level.obstacles) {
                 obstacles.push(new Obstacle(points));
+            }
+
+            dangerZones = [];
+            for (let points of level.dangerZones) {
+                dangerZones.push(new DangerZone(points));
             }
 
             // Сбрасываем агентов в области рождения
@@ -317,6 +340,11 @@
                 // Коллизия с препятствиями
                 for (let obstacle of obstacles) {
                     obstacle.checkCollision(this);
+                }
+
+                // Коллизия с опасными зонами
+                for (let dangerZone of dangerZones) {
+                    dangerZone.checkCollision(this);
                 }
 
                 // Проверка попадания в круглую область
@@ -551,6 +579,85 @@
 
         let obstacles = [];
 
+        // Класс для опасных зон
+        class DangerZone {
+            constructor(points) {
+                this.points = points; // Точки для построения сплайна
+            }
+
+            draw() {
+                if (this.points.length < 2) return; // Пропускаем одиночные точки
+
+                ctx.strokeStyle = "rgba(255, 0, 0, 1)"; // Красный цвет для опасных зон
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+
+                for (let i = 1; i < this.points.length - 1; i++) {
+                    let xc = (this.points[i].x + this.points[i + 1].x) / 2;
+                    let yc = (this.points[i].y + this.points[i + 1].y) / 2;
+                    ctx.lineTo(this.points[i].x, this.points[i].y, xc, yc);
+                }
+
+                // Завершаем последнюю часть пути
+                let last = this.points.length - 1;
+                ctx.lineTo(this.points[last].x, this.points[last].y);
+
+                ctx.stroke();
+            }
+
+            // Проверка коллизии агента с опасной зоной
+            checkCollision(agent) {
+                for (let i = 0; i < this.points.length - 1; i++) {
+                    let x1 = this.points[i].x, y1 = this.points[i].y;
+                    let x2 = this.points[i + 1].x, y2 = this.points[i + 1].y;
+
+                    // Вектор сегмента опасной зоны
+                    let segDX = x2 - x1;
+                    let segDY = y2 - y1;
+                    let segLength = Math.sqrt(segDX * segDX + segDY * segDY);
+
+                    // Нормализованный вектор сегмента
+                    let segNormX = segDX / segLength;
+                    let segNormY = segDY / segLength;
+
+                    // Вектор от начала сегмента к агенту
+                    let toAgentX = agent.x - x1;
+                    let toAgentY = agent.y - y1;
+
+                    // Проекция вектора toAgent на сегмент
+                    let projection = toAgentX * segNormX + toAgentY * segNormY;
+
+                    // Если проекция за пределами сегмента, пропускаем
+                    if (projection < 0 || projection > segLength) continue;
+
+                    // Ближайшая точка на сегменте к агенту
+                    let closestX = x1 + projection * segNormX;
+                    let closestY = y1 + projection * segNormY;
+
+                    // Расстояние от агента до ближайшей точки на сегменте
+                    let distX = agent.x - closestX;
+                    let distY = agent.y - closestY;
+                    let dist = Math.sqrt(distX * distX + distY * distY);
+
+                    // Если расстояние меньше радиуса агента, происходит коллизия
+                    if (dist < collisionRadius) {
+                        // Телепортируем агента в зону спавна
+                        let angle = Math.random() * Math.PI * 2; // Случайный угол
+                        let radius = Math.random() * spawnRadius; // Случайный радиус внутри области
+                        agent.x = spawnX + Math.cos(angle) * radius;
+                        agent.y = spawnY + Math.sin(angle) * radius;
+
+                        // Сбрасываем скорость агента
+                        agent.vx = (Math.random() - 0.5) * 2;
+                        agent.vy = (Math.random() - 0.5) * 2;
+                    }
+                }
+            }
+        }
+
+        let dangerZones = []; // Массив опасных зон
+
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -584,6 +691,11 @@
             // Рисуем препятствия
             for (let obstacle of obstacles) {
                 obstacle.draw();
+            }
+
+            // Рисуем опасные зоны
+            for (let dangerZone of dangerZones) {
+                dangerZone.draw();
             }
 
             // Рисуем круглую область
