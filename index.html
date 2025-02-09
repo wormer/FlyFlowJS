@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlyFlow - Smart Swarm</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; }
+        canvas { display: block; }
+        #resetButton {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px 15px;
+            background: red;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 10;
+        }
+        #resetButton:hover { background: darkred; }
+    </style>
+</head>
+<body>
+    <button id="resetButton">Сброс</button>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const resetButton = document.getElementById("resetButton");
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let paths = [];
+        let swarm = [];
+        const maxActivationRadius = 100; // Максимальный радиус активации
+        const numAgents = 1000; 
+        const collisionRadius = 8;
+        let drawing = false;
+
+        // Класс для управления радиусом активации линии
+        class ActivationRadius {
+            constructor() {
+                this.radius = 0;
+                this.targetRadius = 0;
+                this.duration = 0;
+                this.startTime = 0;
+                this.isIncreasing = false;
+                this.startRadius = 0; // Начальное значение радиуса при уменьшении
+            }
+
+            // Увеличиваем радиус до максимального значения
+            increase() {
+                this.targetRadius = maxActivationRadius;
+                this.duration = 1000; // 1 секунда
+                this.startTime = performance.now();
+                this.isIncreasing = true;
+            }
+
+            // Уменьшаем радиус до нуля
+            decrease() {
+                this.targetRadius = 0;
+                this.duration = 3000; // 3 секунды
+                this.startTime = performance.now();
+                this.startRadius = this.radius; // Запоминаем текущий радиус
+                this.isIncreasing = false;
+            }
+
+            // Обновляем радиус
+            update() {
+                const now = performance.now();
+                const elapsed = now - this.startTime;
+                const progress = Math.min(elapsed / this.duration, 1);
+
+                if (this.isIncreasing) {
+                    this.radius = this.startRadius + (this.targetRadius - this.startRadius) * progress;
+                } else {
+                    this.radius = this.startRadius * (1 - progress); // Уменьшаем с текущего значения
+                }
+
+                if (progress >= 1) {
+                    this.radius = this.targetRadius;
+                }
+            }
+
+            // Возвращает цвет линии в зависимости от радиуса
+            getColor() {
+                const intensity = this.radius / maxActivationRadius; // Интенсивность от 0 до 1
+                const grayValue = Math.floor(intensity * 255); // От чёрного (0) к белому (255)
+                return `rgb(${grayValue}, ${grayValue}, ${grayValue})`;
+            }
+        }
+
+        canvas.addEventListener("mousedown", (e) => { 
+            if (e.target !== resetButton) { 
+                const newPath = {
+                    points: [],
+                    activationRadius: new ActivationRadius() // Создаём новый радиус для линии
+                };
+                paths.push(newPath); // Добавляем новый путь
+                drawing = true;
+                newPath.activationRadius.increase(); // Начинаем увеличивать радиус
+            }
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            if (drawing) {
+                const currentPath = paths[paths.length - 1];
+                currentPath.points.push({ x: e.clientX, y: e.clientY });
+            }
+        });
+
+        canvas.addEventListener("mouseup", () => { 
+            drawing = false;
+            const currentPath = paths[paths.length - 1];
+            currentPath.activationRadius.decrease(); // Начинаем уменьшать радиус
+        });
+
+        class Agent {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.speed = 2;
+                this.maxSpeed = 3;
+                this.influence = 0.15;
+                this.stopped = false;
+                this.friction = 0.98;
+                this.influenced = false; // Новое свойство для отслеживания влияния линии
+                this.targetX = x; // Целевая точка для гравитации
+                this.targetY = y;
+            }
+
+            update() {
+                let target = this.findClosestSegment();
+                if (target) {
+                    let { x1, y1, x2, y2, radius } = target;
+
+                    let segDX = x2 - x1;
+                    let segDY = y2 - y1;
+                    let segLength = Math.sqrt(segDX * segDX + segDY * segDY);
+                    if (segLength > 0) {
+                        segDX /= segLength;
+                        segDY /= segLength;
+                    }
+
+                    let toSegmentX = x1 - this.x;
+                    let toSegmentY = y1 - this.y;
+                    let distToSegment = Math.sqrt(toSegmentX * toSegmentX + toSegmentY * toSegmentY);
+
+                    if (distToSegment < radius) {
+                        this.vx += segDX * this.influence;
+                        this.vy += segDY * this.influence;
+                        this.influenced = true; // Точка под влиянием линии
+                    } else {
+                        this.influenced = false; // Точка не под влиянием линии
+                    }
+
+                    this.attractToLine(target);
+                } else {
+                    this.influenced = false; // Точка не под влиянием линии
+                }
+
+                // Гравитационное притяжение к целевой точке
+                const gravityStrength = 0.1; // Сила гравитации
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) {
+                    const force = gravityStrength / (dist * dist + 0.1); // Обратно квадратичное притяжение
+                    this.vx += (dx / dist) * force;
+                    this.vy += (dy / dist) * force;
+                }
+
+                this.avoidCollisions();
+
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+
+                let speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (speed > this.maxSpeed) {
+                    this.vx *= this.maxSpeed / speed;
+                    this.vy *= this.maxSpeed / speed;
+                }
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.x < 0) { this.x = 0; this.vx *= -1; }
+                if (this.x > canvas.width) { this.x = canvas.width; this.vx *= -1; }
+                if (this.y < 0) { this.y = 0; this.vy *= -1; }
+                if (this.y > canvas.height) { this.y = canvas.height; this.vy *= -1; }
+            }
+
+            findClosestSegment() {
+                let minDist = Infinity;
+                let closestSegment = null;
+
+                for (let path of paths) {
+                    for (let i = 0; i < path.points.length - 1; i++) {
+                        let x1 = path.points[i].x, y1 = path.points[i].y;
+                        let x2 = path.points[i + 1].x, y2 = path.points[i + 1].y;
+                        let dx = this.x - x1, dy = this.y - y1;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < minDist && dist < path.activationRadius.radius) {
+                            minDist = dist;
+                            closestSegment = { x1, y1, x2, y2, radius: path.activationRadius.radius };
+                        }
+                    }
+                }
+                return closestSegment;
+            }
+
+            avoidCollisions() {
+                for (let i = 0; i < swarm.length; i++) {
+                    let other = swarm[i];
+                    if (other !== this) {
+                        let dx = other.x - this.x;
+                        let dy = other.y - this.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < collisionRadius) {
+                            let angle = Math.atan2(dy, dx);
+                            let distanceToAvoid = collisionRadius - dist;
+                            let repelStrength = distanceToAvoid / collisionRadius;
+
+                            this.vx -= Math.cos(angle) * repelStrength;
+                            this.vy -= Math.sin(angle) * repelStrength;
+                        }
+                    }
+                }
+            }
+
+            attractToLine({ x1, y1, x2, y2 }) {
+                let lineDX = x2 - x1;
+                let lineDY = y2 - y1;
+                let lineLength = Math.sqrt(lineDX * lineDX + lineDY * lineDY);
+
+                if (lineLength > 0) {
+                    lineDX /= lineLength;
+                    lineDY /= lineLength;
+
+                    let toLineX = this.x - x1;
+                    let toLineY = this.y - y1;
+                    let projection = (toLineX * lineDX + toLineY * lineDY);
+                    let closestX = x1 + projection * lineDX;
+                    let closestY = y1 + projection * lineDY;
+
+                    let distToLine = Math.sqrt((this.x - closestX) ** 2 + (this.y - closestY) ** 2);
+
+                    // Обратно квадратичное притяжение
+                    const k = 1.0; // Увеличиваем коэффициент силы притяжения
+                    const epsilon = 0.1; // Маленькое число, чтобы избежать деления на ноль
+                    let attractionForce = k / (distToLine ** 2 + epsilon);
+
+                    this.vx -= (this.x - closestX) * attractionForce;
+                    this.vy -= (this.y - closestY) * attractionForce;
+
+                    // Обновляем целевую точку для гравитации
+                    this.targetX = closestX;
+                    this.targetY = closestY;
+                }
+            }
+
+            draw() {
+                // Изменяем цвет точки в зависимости от влияния линии
+                ctx.fillStyle = this.influenced ? "yellow" : "cyan";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        resetButton.addEventListener("click", () => {
+            swarm = Array.from({ length: numAgents }, () => new Agent(
+                Math.random() * canvas.width, 
+                Math.random() * canvas.height
+            ));
+            paths = []; // Очищаем все пути
+        });
+
+        resetButton.click();
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Обновляем радиус активации для каждой линии и удаляем линии с нулевым радиусом
+            paths = paths.filter(path => {
+                path.activationRadius.update();
+                return path.activationRadius.radius > 0; // Убираем линии с нулевым радиусом
+            });
+
+            // Рисуем линии
+            for (let path of paths) {
+                if (path.points.length < 2) continue; // Пропускаем одиночные точки
+
+                ctx.strokeStyle = path.activationRadius.getColor(); // Цвет линии зависит от радиуса
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(path.points[0].x, path.points[0].y);
+
+                for (let i = 1; i < path.points.length - 1; i++) {
+                    let xc = (path.points[i].x + path.points[i + 1].x) / 2;
+                    let yc = (path.points[i].y + path.points[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(path.points[i].x, path.points[i].y, xc, yc);
+                }
+
+                // Завершаем последнюю часть пути
+                let last = path.points.length - 1;
+                ctx.lineTo(path.points[last].x, path.points[last].y);
+
+                ctx.stroke();
+            }
+
+            // Обновляем и рисуем точки
+            swarm.forEach(agent => {
+                agent.update();
+                agent.draw();
+            });
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>
