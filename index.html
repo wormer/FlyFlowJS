@@ -24,13 +24,20 @@
 
         const logicalWidth = 1920;
         const logicalHeight = 1080;
+        const numAgents = 1000;
+        const collisionRadius = 8;
+        const maxActivationRadius = 100;
 
         let paths = [];
         let swarm = [];
-        const maxActivationRadius = 100; // Максимальный радиус активации
-        const numAgents = 1000; 
-        const collisionRadius = 8;
         let drawing = false;
+        let currentLevel = 0;
+        let score = 0;
+        let goalRadius = 50;
+        let goalX, goalY;
+        let spawnX, spawnY, spawnRadius;
+        let obstacles = [];
+        let dangerZones = [];
 
         // Массив уровней
         const levels = [
@@ -103,13 +110,14 @@
             },
         ];
 
-        let currentLevel = 0; // Текущий уровень
-        let score = 0; // Счётчик очков
-        let goalRadius = 50; // Радиус круглой области
-        let goalX, goalY; // Позиция круглой области
-        let spawnX, spawnY, spawnRadius; // Позиция и радиус области рождения агентов
+        // Инициализация игры
+        function initGame() {
+            loadLevel(currentLevel);
+            resizeCanvas();
+            animate();
+        }
 
-        // Функция для загрузки уровня
+        // Загрузка уровня
         function loadLevel(levelIndex) {
             const level = levels[levelIndex];
             goalX = level.goalX;
@@ -118,33 +126,22 @@
             spawnY = level.spawnY;
             spawnRadius = level.spawnRadius;
 
-            // Очищаем массив линий
             paths = [];
+            obstacles = level.obstacles.map(points => new Obstacle(points));
+            dangerZones = level.dangerZones.map(points => new DangerZone(points));
 
-            // Очищаем массив препятствий и добавляем новые
-            obstacles = [];
-            for (let points of level.obstacles) {
-                obstacles.push(new Obstacle(points));
-            }
+            swarm = Array.from({ length: numAgents }, () => {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * spawnRadius;
+                return new Agent(
+                    spawnX + Math.cos(angle) * radius,
+                    spawnY + Math.sin(angle) * radius
+                );
+            });
 
-            dangerZones = [];
-            for (let points of level.dangerZones) {
-                dangerZones.push(new DangerZone(points));
-            }
-
-            // Сбрасываем агентов в области рождения
-            swarm = [];
-            for (let i = 0; i < numAgents; i++) {
-                let angle = Math.random() * Math.PI * 2; // Случайный угол
-                let radius = Math.random() * spawnRadius; // Случайный радиус внутри области
-                let x = spawnX + Math.cos(angle) * radius;
-                let y = spawnY + Math.sin(angle) * radius;
-                swarm.push(new Agent(x, y));
-            }
-
-            // Сбрасываем счётчик очков
             score = 0;
         }
+
 
         // Функция для отрисовки круглой области и счётчика очков
         function drawGoal() {
@@ -237,75 +234,62 @@
 
         function getMousePos(e) {
             const rect = canvas.getBoundingClientRect();
+            const scaleX = logicalWidth / canvas.clientWidth;
+            const scaleY = logicalHeight / canvas.clientHeight;
 
-            // Физические размеры канваса
-            const canvasWidth = canvas.clientWidth; // Физическая ширина канваса
-            const canvasHeight = canvas.clientHeight; // Физическая высота канваса
+            let mouseX = e.clientX - rect.left;
+            let mouseY = e.clientY - rect.top;
 
-            // Логические размеры (1920x1080)
-            const logicalWidth = 1920;
-            const logicalHeight = 1080;
+            // Ограничиваем координаты в пределах канваса
+            mouseX = Math.max(0, Math.min(mouseX, canvas.clientWidth));
+            mouseY = Math.max(0, Math.min(mouseY, canvas.clientHeight));
 
-            // Масштаб по осям X и Y
-            const scaleX = logicalWidth / canvasWidth; // Масштаб по X
-            const scaleY = logicalHeight / canvasHeight; // Масштаб по Y
-
-            // Координаты мыши относительно канваса
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-
-            // Преобразуем физические координаты в логические
-            const logicalX = mouseX * scaleX;
-            const logicalY = mouseY * scaleY;
-
-            return { x: logicalX, y: logicalY };
+            return {
+                x: mouseX * scaleX,
+                y: mouseY * scaleY
+            };
         }
 
-        // Добавляем обработчик для создания препятствий
-        canvas.addEventListener("mousedown", (e) => {
+        // Обработка событий мыши
+        function handleMouseEvents() {
+            canvas.addEventListener("mousedown", (e) => {
             const { x, y } = getMousePos(e);
 
-            if (e.shiftKey) { // Если зажата клавиша Shift, создаем препятствие
-                const newObstacle = new Obstacle([]);
-                obstacles.push(newObstacle);
-                drawing = true;
-                newObstacle.points.push({ x, y });
-            } else { // Иначе создаем обычную линию
-                const newPath = {
-                    points: [{ x, y }],
-                    activationRadius: new ActivationRadius()
-                };
-                paths.push(newPath);
-                drawing = true;
-                newPath.activationRadius.increase();
+            if (e.shiftKey) {
+                obstacles.push(new Obstacle([{ x, y }]));
+            } else {
+                const radius = new ActivationRadius()
+                paths.push(new Path([{ x, y }], radius));
+                radius.increase()
             }
+            drawing = true;
         });
 
-        canvas.addEventListener("mousemove", (e) => {
-            if (drawing) {
-                const { x, y } = getMousePos(e);
-
-                if (e.shiftKey) { // Если зажата клавиша Shift, добавляем точки к препятствию
-                    const currentObstacle = obstacles[obstacles.length - 1];
-                    if (currentObstacle) {
-                        currentObstacle.points.push({ x, y });
-                    }
-                } else { // Иначе добавляем точки к обычной линии
-                    const currentPath = paths[paths.length - 1];
-                    if (currentPath) {
-                        currentPath.points.push({ x, y });
+            canvas.addEventListener("mousemove", (e) => {
+                if (drawing) {
+                    const { x, y } = getMousePos(e);
+                    if (e.shiftKey) {
+                        const currentObstacle = obstacles[obstacles.length - 1];
+                        if (currentObstacle) {
+                            currentObstacle.points.push({ x, y });
+                        }
+                    } else {
+                        const currentPath = paths[paths.length - 1];
+                        if (currentPath) {
+                            currentPath.points.push({ x, y });
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        canvas.addEventListener("mouseup", () => {
-            drawing = false;
-            if (paths.length > 0) {
-                const currentPath = paths[paths.length - 1];
-                currentPath.activationRadius.decrease();
-            }
-        });
+            canvas.addEventListener("mouseup", () => {
+                drawing = false;
+                if (paths.length > 0) {
+                    const currentPath = paths[paths.length - 1];
+                    currentPath.activationRadius.decrease();
+                }
+            });
+        }
 
         class Agent {
             constructor(x, y) {
@@ -521,6 +505,32 @@
             }
         }
 
+        class Path {
+            constructor(points, activationRadius) {
+                this.points = points;
+                this.activationRadius = activationRadius;
+            }
+
+            draw() {
+                if (this.points.length < 2) return;
+
+                ctx.strokeStyle = this.activationRadius.getColor();
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+
+                for (let i = 1; i < this.points.length - 1; i++) {
+                    let xc = (this.points[i].x + this.points[i + 1].x) / 2;
+                    let yc = (this.points[i].y + this.points[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(this.points[i].x, this.points[i].y, xc, yc);
+                }
+
+                let last = this.points.length - 1;
+                ctx.lineTo(this.points[last].x, this.points[last].y);
+                ctx.stroke();
+            }
+        }
+
         // Класс для препятствий
         class Obstacle {
             constructor(points) {
@@ -614,8 +624,6 @@
             }
         }
 
-        let obstacles = [];
-
         // Класс для опасных зон
         class DangerZone {
             constructor(points) {
@@ -693,8 +701,7 @@
             }
         }
 
-        let dangerZones = []; // Массив опасных зон
-
+        // Отрисовка игры
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -704,69 +711,28 @@
                 return path.activationRadius.radius > 0;
             });
 
-            // Рисуем линии
-
             // Вычисляем масштаб
             const scaleX = canvas.width / logicalWidth;
             const scaleY = canvas.height / logicalHeight;
-            // const scale = Math.min(scaleX, scaleY); // Используем минимальный масштаб, чтобы сохранить пропорции
 
-            // Применяем трансформации
-            ctx.save(); // Сохраняем текущее состояние контекста
-            ctx.translate(canvas.width / 2, canvas.height / 2); // Смещаем начало координат в центр
-            ctx.scale(scaleX, scaleY); // Применяем масштаб
-            ctx.translate(-logicalWidth / 2, -logicalHeight / 2); // Возвращаем начало координат в логическую позицию
+            ctx.save();
+            ctx.scale(scaleX, scaleY);
 
-            // Отрисовываем все объекты
-            for (let path of paths) {
-                if (path.points.length < 2) continue;
-
-                ctx.strokeStyle = path.activationRadius.getColor();
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(path.points[0].x, path.points[0].y);
-
-                for (let i = 1; i < path.points.length - 1; i++) {
-                    let xc = (path.points[i].x + path.points[i + 1].x) / 2;
-                    let yc = (path.points[i].y + path.points[i + 1].y) / 2;
-                    ctx.quadraticCurveTo(path.points[i].x, path.points[i].y, xc, yc);
-                }
-
-                let last = path.points.length - 1;
-                ctx.lineTo(path.points[last].x, path.points[last].y);
-
-                ctx.stroke();
-            }
-
-            // Рисуем препятствия
-            for (let obstacle of obstacles) {
-                obstacle.draw();
-            }
-
-            // Рисуем опасные зоны
-            for (let dangerZone of dangerZones) {
-                dangerZone.draw();
-            }
-
-            // Рисуем круглую область
+            // Отрисовка всех объектов
+            paths.forEach(path => path.draw());
+            obstacles.forEach(obstacle => obstacle.draw());
+            dangerZones.forEach(dangerZone => dangerZone.draw());
             drawGoal();
-
-            // Рисуем область рождения агентов
             drawSpawnArea();
-
-            // Обновляем и рисуем точки
             swarm.forEach(agent => {
                 agent.update();
                 agent.draw();
             });
 
-            ctx.restore(); // Восстанавливаем состояние контекста
+            ctx.restore();
 
             requestAnimationFrame(animate);
         }
-
-        // Загружаем первый уровень при старте
-        loadLevel(currentLevel);
 
         function resizeCanvas() {
             // Получаем физические размеры канваса из CSS
@@ -781,11 +747,10 @@
         // Отслеживаем изменение размеров окна
         window.addEventListener("resize", resizeCanvas);
 
-        // Инициализация размеров канваса при загрузке
-        resizeCanvas();
 
-        // Запускаем анимацию
-        animate();
+        // Запуск игры
+        initGame();
+        handleMouseEvents();
     </script>
 </body>
 </html>
