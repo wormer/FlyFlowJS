@@ -232,30 +232,33 @@
             }
         }
 
-        function getMousePos(e) {
+        function getInputPos(e) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = logicalWidth / canvas.clientWidth;
             const scaleY = logicalHeight / canvas.clientHeight;
 
-            let mouseX = e.clientX - rect.left;
-            let mouseY = e.clientY - rect.top;
+            let x, y;
 
-            // Ограничиваем координаты в пределах канваса
-            mouseX = Math.max(0, Math.min(mouseX, canvas.clientWidth));
-            mouseY = Math.max(0, Math.min(mouseY, canvas.clientHeight));
+            if (e.touches) { // Для сенсорных устройств
+                const touch = e.touches[0];
+                x = touch.clientX - rect.left;
+                y = touch.clientY - rect.top;
+            } else { // Для мыши
+                x = e.clientX - rect.left;
+                y = e.clientY - rect.top;
+            }
 
             return {
-                x: mouseX * scaleX,
-                y: mouseY * scaleY
+                x: x * scaleX,
+                y: y * scaleY
             };
         }
 
-        // Обработка событий мыши
-        function handleMouseEvents() {
-            canvas.addEventListener("mousedown", (e) => {
-            const { x, y } = getMousePos(e);
+        function handleInputStart(e) {
+            e.preventDefault();
+            const { x, y } = getInputPos(e);
 
-            if (e.shiftKey) {
+            if (e.shiftKey) { // Для мобильных устройств shiftKey не работает
                 obstacles.push(new Obstacle([{ x, y }]));
             } else {
                 const radius = new ActivationRadius()
@@ -263,32 +266,44 @@
                 radius.increase()
             }
             drawing = true;
-        });
+        }
 
-            canvas.addEventListener("mousemove", (e) => {
-                if (drawing) {
-                    const { x, y } = getMousePos(e);
-                    if (e.shiftKey) {
-                        const currentObstacle = obstacles[obstacles.length - 1];
-                        if (currentObstacle) {
-                            currentObstacle.points.push({ x, y });
-                        }
-                    } else {
-                        const currentPath = paths[paths.length - 1];
-                        if (currentPath) {
-                            currentPath.points.push({ x, y });
-                        }
+        function handleInputMove(e) {
+            e.preventDefault();
+            if (drawing) {
+                const { x, y } = getInputPos(e);
+                if (e.shiftKey) { // Для мобильных устройств shiftKey не работает
+                    const currentObstacle = obstacles[obstacles.length - 1];
+                    if (currentObstacle) {
+                        currentObstacle.points.push({ x, y });
+                    }
+                } else {
+                    const currentPath = paths[paths.length - 1];
+                    if (currentPath) {
+                        currentPath.points.push({ x, y });
                     }
                 }
-            });
+            }
+        }
 
-            canvas.addEventListener("mouseup", () => {
-                drawing = false;
-                if (paths.length > 0) {
-                    const currentPath = paths[paths.length - 1];
-                    currentPath.activationRadius.decrease();
-                }
-            });
+        function handleInputEnd() {
+            drawing = false;
+            if (paths.length > 0) {
+                const currentPath = paths[paths.length - 1];
+                currentPath.activationRadius.decrease();
+            }
+        }
+
+        function handleMouseEvents() {
+            // Обработчики для мыши
+            canvas.addEventListener("mousedown", handleInputStart);
+            canvas.addEventListener("mousemove", handleInputMove);
+            canvas.addEventListener("mouseup", handleInputEnd);
+
+            // Обработчики для сенсорных устройств
+            canvas.addEventListener("touchstart", handleInputStart);
+            canvas.addEventListener("touchmove", handleInputMove);
+            canvas.addEventListener("touchend", handleInputEnd);
         }
 
         class Agent {
@@ -746,7 +761,6 @@
 
         // Отслеживаем изменение размеров окна
         window.addEventListener("resize", resizeCanvas);
-
 
         // Запуск игры
         initGame();
