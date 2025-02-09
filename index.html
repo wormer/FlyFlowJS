@@ -41,11 +41,60 @@
         const collisionRadius = 8;
         let drawing = false;
 
-        // Добавляем переменные для счётчика очков и круглой области
-        let score = 0;
-        const goalRadius = 50; // Радиус круглой области
-        const goalX = canvas.width / 2; // Центр области по X
-        const goalY = canvas.height / 2; // Центр области по Y
+        // Массив уровней
+        const levels = [
+            {
+                goalX: 1500,
+                goalY: 350,
+                obstacles: [
+                    // Пример замкнутых линий препятствий (прямоугольники)
+                    [{ x: 100, y: 100 }, { x: 500, y: 100 }, { x: 500, y: 300 }, { x: 1400, y: 300 }, { x: 1400, y: 200 }, { x: 1600, y: 200 }, { x: 1600, y: 500 }, { x: 1400, y: 500 }, { x: 1400, y: 400 }, { x: 500, y: 400 }, { x: 500, y: 600 }, { x: 100, y: 600 }, { x: 100, y: 100 }],
+                ]
+            },
+            {
+                goalX: canvas.width / 4,
+                goalY: canvas.height / 4,
+                obstacles: [
+                    // Другой набор препятствий для второго уровня
+                    [{ x: 50, y: 50 }, { x: 150, y: 50 }, { x: 150, y: 150 }, { x: 50, y: 150 }, { x: 50, y: 50 }],
+                    [{ x: 300, y: 50 }, { x: 400, y: 50 }, { x: 400, y: 150 }, { x: 300, y: 150 }, { x: 300, y: 50 }],
+                    [{ x: 50, y: 300 }, { x: 150, y: 300 }, { x: 150, y: 400 }, { x: 50, y: 400 }, { x: 50, y: 300 }],
+                    [{ x: 300, y: 300 }, { x: 400, y: 300 }, { x: 400, y: 400 }, { x: 300, y: 400 }, { x: 300, y: 300 }],
+                    [{ x: 200, y: 200 }, { x: 300, y: 200 }, { x: 300, y: 300 }, { x: 200, y: 300 }, { x: 200, y: 200 }],
+                ]
+            },
+            // Добавьте больше уровней по аналогии
+        ];
+
+        let currentLevel = 0; // Текущий уровень
+        let score = 0; // Счётчик очков
+        let goalRadius = 50; // Радиус круглой области
+        let goalX, goalY; // Позиция круглой области
+
+        // Функция для загрузки уровня
+        function loadLevel(levelIndex) {
+            const level = levels[levelIndex];
+            goalX = level.goalX;
+            goalY = level.goalY;
+
+            // Очищаем массив линий
+            paths = [];
+
+            // Очищаем массив препятствий и добавляем новые
+            obstacles = [];
+            for (let points of level.obstacles) {
+                obstacles.push(new Obstacle(points));
+            }
+
+            // Сбрасываем агентов
+            swarm = Array.from({ length: numAgents }, () => new Agent(
+                Math.random() * canvas.width,
+                Math.random() * canvas.height
+            ));
+
+            // Сбрасываем счётчик очков
+            score = 0;
+        }
 
         // Функция для отрисовки круглой области
         function drawGoal() {
@@ -142,10 +191,14 @@
             if (drawing) {
                 if (e.shiftKey) { // Если зажата клавиша Shift, добавляем точки к препятствию
                     const currentObstacle = obstacles[obstacles.length - 1];
-                    currentObstacle.points.push({ x: e.clientX, y: e.clientY });
+                    if (currentObstacle) {
+                        currentObstacle.points.push({ x: e.clientX, y: e.clientY });
+                    }
                 } else { // Иначе добавляем точки к обычной линии
                     const currentPath = paths[paths.length - 1];
-                    currentPath.points.push({ x: e.clientX, y: e.clientY });
+                    if (currentPath) {
+                        currentPath.points.push({ x: e.clientX, y: e.clientY });
+                    }
                 }
             }
         });
@@ -239,6 +292,12 @@
                     // Агент попал в область, удаляем его и увеличиваем счётчик очков
                     swarm.splice(swarm.indexOf(this), 1);
                     score += 1;
+
+                    // Если набрано 500 очков, переходим на следующий уровень
+                    if (score >= 500) {
+                        currentLevel = (currentLevel + 1) % levels.length; // Переход на следующий уровень
+                        loadLevel(currentLevel); // Загружаем новый уровень
+                    }
                 }
 
                 this.avoidCollisions();
@@ -378,7 +437,7 @@
                 for (let i = 1; i < this.points.length - 1; i++) {
                     let xc = (this.points[i].x + this.points[i + 1].x) / 2;
                     let yc = (this.points[i].y + this.points[i + 1].y) / 2;
-                    ctx.quadraticCurveTo(this.points[i].x, this.points[i].y, xc, yc);
+                    ctx.lineTo(this.points[i].x, this.points[i].y, xc, yc);
                 }
 
                 // Завершаем последнюю часть пути
@@ -515,6 +574,11 @@
 
             requestAnimationFrame(animate);
         }
+
+        // Загружаем первый уровень при старте
+        loadLevel(currentLevel);
+
+        // Запускаем анимацию
         animate();
     </script>
 </body>
