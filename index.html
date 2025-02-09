@@ -465,8 +465,8 @@
             draw() {
                 if (this.points.length < 2) return; // Пропускаем одиночные точки
 
-                ctx.strokeStyle = "rgba(255, 0, 0, 0.5)"; // Красный цвет для препятствий
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.lineWidth = 4;
                 ctx.beginPath();
                 ctx.moveTo(this.points[0].x, this.points[0].y);
 
