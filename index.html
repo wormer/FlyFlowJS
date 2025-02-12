@@ -13,13 +13,31 @@
             display: block;
             background: black;
         }
+        #fullscreen-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            font-size: 14px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        #fullscreen-btn:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
+    <button id="fullscreen-btn">Enter fullscreen mode</button>
 
     <script>
         const canvas = document.getElementById("canvas");
+        const fullscreenBtn = document.getElementById("fullscreen-btn");
         const ctx = canvas.getContext("2d");
 
         const logicalWidth = 1920;
@@ -110,6 +128,44 @@
             },
         ];
 
+        // Функция для переключения полноэкранного режима
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                // Переход в полноэкранный режим
+                if (canvas.requestFullscreen) {
+                    canvas.requestFullscreen();
+                } else if (canvas.mozRequestFullScreen) { // Firefox
+                    canvas.mozRequestFullScreen();
+                } else if (canvas.webkitRequestFullscreen) { // Chrome, Safari, Edge
+                    canvas.webkitRequestFullscreen();
+                } else if (canvas.msRequestFullscreen) { // IE/Edge
+                    canvas.msRequestFullscreen();
+                }
+            } else {
+                // Выход из полноэкранного режима
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) { // Firefox
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) { // Chrome, Safari, Edge
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) { // IE/Edge
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        // Обработчик клика по кнопке
+        fullscreenBtn.addEventListener("click", toggleFullscreen);
+
+        // Отслеживание изменения полноэкранного режима
+        document.addEventListener("fullscreenchange", () => {
+            if (document.fullscreenElement) {
+                fullscreenBtn.textContent = "Exit fullscreen mode";
+            } else {
+                fullscreenBtn.textContent = "Enter fullscreen mode";
+            }
+        });
         // Инициализация игры
         function initGame() {
             loadLevel(currentLevel);
@@ -761,6 +817,9 @@
 
         // Отслеживаем изменение размеров окна
         window.addEventListener("resize", resizeCanvas);
+
+        // Отслеживаем изменение полноэкранного режима
+        document.addEventListener("fullscreenchange", resizeCanvas);
 
         // Запуск игры
         initGame();
